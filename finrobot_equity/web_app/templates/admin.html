@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinRobot Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.3); border-radius: 10px; }
+    </style>
+</head>
+<script>
+    window.USER_DATA = {
+        name: "{{ user.name if user else '' }}",
+        email: "{{ user.email if user else '' }}"
+    };
+</script>
+{% raw %}
+<body class="bg-black text-white min-h-screen" id="app">
+
+    <!-- Header -->
+    <header class="border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-md sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="/" class="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    Back
+                </a>
+                <div class="h-4 w-px bg-white/10"></div>
+                <h1 class="font-semibold text-white text-sm">Admin Dashboard</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-slate-400">{{ userName }}</span>
+                <button @click="logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors">Sign out</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+        <!-- Error banner -->
+        <div v-if="error" class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{{ error }}</div>
+
+        <!-- Stats Cards -->
+        <div v-if="stats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div class="text-3xl font-bold text-white mb-1">{{ stats.users.total }}</div>
+                <div class="text-xs text-slate-400 uppercase tracking-wider">Total Users</div>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div class="text-3xl font-bold text-emerald-400 mb-1">{{ stats.users.active_7d }}</div>
+                <div class="text-xs text-slate-400 uppercase tracking-wider">Active (7d)</div>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div class="text-3xl font-bold text-blue-400 mb-1">{{ stats.reports.total }}</div>
+                <div class="text-xs text-slate-400 uppercase tracking-wider">Total Reports</div>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div class="text-3xl font-bold text-violet-400 mb-1">{{ stats.requests.total_24h }}</div>
+                <div class="text-xs text-slate-400 uppercase tracking-wider">Requests (24h)</div>
+            </div>
+        </div>
+        <div v-if="stats" class="grid grid-cols-3 gap-4">
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div class="text-2xl font-bold text-emerald-400 mb-1">{{ stats.reports.completed }}</div>
+                <div class="text-xs text-slate-400 uppercase tracking-wider">Completed Reports</div>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div class="text-2xl font-bold text-red-400 mb-1">{{ stats.reports.failed }}</div>
+                <div class="text-xs text-slate-400 uppercase tracking-wider">Failed Reports</div>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div class="text-2xl font-bold text-amber-400 mb-1">{{ stats.reports.running }}</div>
+                <div class="text-xs text-slate-400 uppercase tracking-wider">Running Now</div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex gap-1 border-b border-white/5 pb-0">
+            <button v-for="tab in ['users','reports','requests']" :key="tab" @click="activeTab = tab" class="px-4 py-2 text-xs font-medium rounded-t-lg capitalize transition-all" :class="activeTab === tab ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'">
+                {{ tab }}
+            </button>
+        </div>
+
+        <!-- Users Table -->
+        <div v-if="activeTab === 'users'">
+            <div v-if="loadingUsers" class="text-slate-500 text-sm py-8 text-center">Loading users...</div>
+            <div v-else class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-white/5">
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">User</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Provider</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Joined</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Last Login</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="u in users" :key="u.id" class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td class="py-3 px-4 font-medium text-white">{{ u.name || '—' }}</td>
+                            <td class="py-3 px-4 text-slate-400">{{ u.email }}</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="u.provider === 'github' ? 'bg-slate-700 text-slate-300' : 'bg-blue-500/20 text-blue-300'">{{ u.provider || 'local' }}</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">{{ u.created_at ? u.created_at.slice(0,10) : '—' }}</td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">{{ u.last_login ? u.last_login.slice(0,10) : '—' }}</td>
+                            <td class="py-3 px-4">
+                                <span class="w-1.5 h-1.5 rounded-full inline-block mr-1" :class="u.is_active ? 'bg-emerald-400' : 'bg-red-400'"></span>
+                                <span class="text-xs text-slate-400">{{ u.is_active ? 'Active' : 'Inactive' }}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="users.length === 0" class="text-center text-slate-500 py-8">No users found.</div>
+            </div>
+        </div>
+
+        <!-- Reports Table -->
+        <div v-if="activeTab === 'reports'">
+            <div v-if="loadingReports" class="text-slate-500 text-sm py-8 text-center">Loading reports...</div>
+            <div v-else class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-white/5">
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ticker</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Company</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">User</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Created</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in reports" :key="r.id" class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td class="py-3 px-4 font-mono font-bold text-white">{{ r.ticker }}</td>
+                            <td class="py-3 px-4 text-slate-400 max-w-[180px] truncate">{{ r.company_name }}</td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">{{ r.user_email }}</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="r.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : r.status === 'failed' ? 'bg-red-500/20 text-red-300' : 'bg-blue-500/20 text-blue-300'">{{ r.status }}</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">{{ r.created_at ? r.created_at.slice(0,16).replace('T',' ') : '—' }}</td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">{{ r.duration_seconds ? r.duration_seconds + 's' : '—' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="reports.length === 0" class="text-center text-slate-500 py-8">No reports found.</div>
+            </div>
+        </div>
+
+        <!-- Requests Table -->
+        <div v-if="activeTab === 'requests'">
+            <div v-if="loadingRequests" class="text-slate-500 text-sm py-8 text-center">Loading requests...</div>
+            <div v-else class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-white/5">
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Endpoint</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Method</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">User</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Duration</th>
+                            <th class="text-left py-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in requestLogs" :key="r.id" class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td class="py-3 px-4 font-mono text-xs text-slate-300 max-w-[220px] truncate">{{ r.endpoint }}</td>
+                            <td class="py-3 px-4">
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold" :class="r.method === 'GET' ? 'bg-blue-500/20 text-blue-300' : 'bg-emerald-500/20 text-emerald-300'">{{ r.method }}</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-500 text-xs truncate max-w-[140px]">{{ r.email || '—' }}</td>
+                            <td class="py-3 px-4">
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold" :class="r.response_status < 300 ? 'bg-emerald-500/20 text-emerald-300' : r.response_status < 400 ? 'bg-amber-500/20 text-amber-300' : 'bg-red-500/20 text-red-300'">{{ r.response_status }}</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">{{ r.duration_ms ? r.duration_ms + 'ms' : '—' }}</td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">{{ r.created_at ? r.created_at.slice(0,16).replace('T',' ') : '—' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="requestLogs.length === 0" class="text-center text-slate-500 py-8">No requests logged.</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        createApp({
+            data() {
+                return {
+                    userName: window.USER_DATA?.name || '',
+                    activeTab: 'users',
+                    stats: null,
+                    users: [],
+                    reports: [],
+                    requestLogs: [],
+                    loadingUsers: false,
+                    loadingReports: false,
+                    loadingRequests: false,
+                    error: null
+                };
+            },
+            mounted() {
+                this.loadStats();
+                this.loadUsers();
+            },
+            watch: {
+                activeTab(tab) {
+                    if (tab === 'users' && this.users.length === 0) this.loadUsers();
+                    if (tab === 'reports' && this.reports.length === 0) this.loadReports();
+                    if (tab === 'requests' && this.requestLogs.length === 0) this.loadRequests();
+                }
+            },
+            methods: {
+                async loadStats() {
+                    try {
+                        const r = await fetch('/api/admin/stats');
+                        if (!r.ok) { this.error = 'Failed to load stats (admin access required)'; return; }
+                        this.stats = await r.json();
+                    } catch (e) { this.error = 'Failed to connect to admin API'; }
+                },
+                async loadUsers() {
+                    this.loadingUsers = true;
+                    try {
+                        const r = await fetch('/api/admin/users?limit=100');
+                        if (!r.ok) { this.error = 'Failed to load users'; return; }
+                        const d = await r.json();
+                        this.users = d.users || [];
+                    } catch (e) { this.error = 'Failed to load users'; }
+                    finally { this.loadingUsers = false; }
+                },
+                async loadReports() {
+                    this.loadingReports = true;
+                    try {
+                        const r = await fetch('/api/admin/reports?limit=100');
+                        if (!r.ok) { this.error = 'Failed to load reports'; return; }
+                        const d = await r.json();
+                        this.reports = d.reports || [];
+                    } catch (e) { this.error = 'Failed to load reports'; }
+                    finally { this.loadingReports = false; }
+                },
+                async loadRequests() {
+                    this.loadingRequests = true;
+                    try {
+                        const r = await fetch('/api/admin/requests?limit=100');
+                        if (!r.ok) { this.error = 'Failed to load requests'; return; }
+                        const d = await r.json();
+                        this.requestLogs = d.requests || [];
+                    } catch (e) { this.error = 'Failed to load requests'; }
+                    finally { this.loadingRequests = false; }
+                },
+                async logout() {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                    window.location.href = '/login';
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+{% endraw %}
+</html>

@@ -1,0 +1,16 @@
+{
+  "tickers": [
+    "AAPL"
+  ],
+  "start": "2024-01-01",
+  "end": "2024-01-31",
+  "anchor_dates": [
+    "2024-01-31"
+  ],
+  "num_snapshots": 1,
+  "num_predictions": 1,
+  "skip_analysis": false,
+  "output_root": "/root/mnt/data/2/FinRobot-master/finrobot_equity/core/src/output/walkforward",
+  "snapshot_file": "/root/mnt/data/2/FinRobot-master/finrobot_equity/core/src/output/walkforward/snapshots.csv",
+  "prediction_file": "/root/mnt/data/2/FinRobot-master/finrobot_equity/core/src/output/walkforward/predictions.csv"
+}

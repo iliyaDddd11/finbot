@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python finrobot_equity/core/src/run_walkforward_eval.py)",
+      "Bash(python run_walkforward_eval.py --start 2023-01-01 --end 2024-01-31 --tickers AAPL --skip-analysis)",
+      "Bash(npx dukascopy-node:*)",
+      "Bash(python run_walkforward_eval.py --start 2024-01-01 --end 2024-03-31 --tickers AAPL --skip-analysis)",
+      "Bash(python run_walkforward_eval.py --start 2024-01-01 --end 2024-01-31 --tickers AAPL)",
+      "Bash(env)",
+      "Bash(find /root/mnt/data/FinRobot-master -name config.ini -o -name *.env -o -name .env -o -name *.cfg)",
+      "Bash(python -c \"import fastapi, uvicorn, sqlalchemy, httpx; print\\(''deps ok''\\)\")",
+      "Bash(python:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/walkforward)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/admin)",
+      "Bash(ip addr:*)",
+      "Bash(iptables -L INPUT -n --line-numbers)",
+      "Bash(ufw status:*)",
+      "Bash(mkdir -p /root/mnt/data/3)",
+      "Bash(cp -r /root/mnt/data/2/FinRobot-master /root/mnt/data/3/FinRobot-master)"
+    ]
+  }
+}

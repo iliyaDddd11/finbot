@@ -1,0 +1,9 @@
+{
+  "ticker": "AAPL",
+  "company_name": "Apple Inc.",
+  "as_of_date": "2024-01-31",
+  "lookback_start_date": "2023-01-31",
+  "dukascopy_instrument_id": "aaplususd",
+  "price_csv_path": "/root/mnt/data/2/FinRobot-master/finrobot_equity/core/src/output/walkforward/AAPL_2024-01-31/snapshot/download/aaplususd-d1-bid-2023-01-31-2024-01-31.csv",
+  "price_rows": 365
+}
