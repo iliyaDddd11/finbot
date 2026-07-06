@@ -9,6 +9,7 @@ from quant_eval.performance_metrics import (
     compute_full_scorecard as _quant_scorecard,
     add_bootstrap_cis,
 )
+from quant_eval.transaction_costs import estimate_tc
 
 
 SIGNAL_DIRECTION = {"long": 1, "short": -1, "neutral": 0}
@@ -48,6 +49,7 @@ def compute_scorecard(
     scored_df: pd.DataFrame,
     periods_per_year: int = 12,
     min_pattern_count: int = 2,
+    round_trip_bps: float | None = None,
 ) -> dict[str, Any]:
     # periods_per_year defaults to 12 because the walk-forward grid is monthly
     # (date_grid.build_month_end_grid uses freq="ME").  Annualised Sharpe / ICIR
@@ -83,13 +85,22 @@ def compute_scorecard(
     }
 
     # Add professional quant metrics (IC, ICIR, Sharpe, max_drawdown, Calmar)
-    quant = _quant_scorecard(scored_df, periods_per_year=periods_per_year)
+    if round_trip_bps is None:
+        round_trip_bps = estimate_tc(liquidity_tier="large").round_trip_bps
+    quant = _quant_scorecard(
+        scored_df, periods_per_year=periods_per_year, round_trip_bps=round_trip_bps
+    )
     metrics["sharpe_ratio"]   = quant.get("sharpe_ratio")
     metrics["max_drawdown"]   = quant.get("max_drawdown")
     metrics["calmar_ratio"]   = quant.get("calmar_ratio")
     metrics["mean_ic"]        = quant.get("mean_ic")
     metrics["icir"]           = quant.get("icir")
     metrics["ic_periods"]     = quant.get("ic_periods", 0)
+    # Net-of-cost performance
+    metrics["avg_turnover"]     = quant.get("avg_turnover")
+    metrics["avg_net_return"]   = quant.get("avg_net_return")
+    metrics["net_sharpe_ratio"] = quant.get("net_sharpe_ratio")
+    metrics["round_trip_bps"]   = quant.get("round_trip_bps")
 
     # Benchmark-relative alpha metrics
     if "alpha_return" in scored_df.columns:

@@ -316,10 +316,15 @@ def factor_eps_growth(income: pd.DataFrame) -> FactorResult:
         start, end = eps_vals[-(n+1)], eps_vals[-1]
 
         if start <= 0 or end <= 0:
-            # Use simple slope instead of CAGR for negative EPS
-            slope = _ols_slope(eps_vals)
-            score = _tanh_score(slope or 0.0, center=0.5, scale=1.0)
-            return FactorResult(name, round(slope or 0.0, 4), round(score, 3), True,
+            # Negative/zero base makes CAGR meaningless. Use the OLS slope, but
+            # normalize by the average EPS magnitude so the hurdle is comparable
+            # across price levels (a $0.50/yr slope means very different things
+            # for a $2 EPS vs a $50 EPS name) and center at 0 (flat = neutral).
+            slope = _ols_slope(eps_vals) or 0.0
+            avg_abs = sum(abs(v) for v in eps_vals) / len(eps_vals)
+            norm_slope = slope / (avg_abs + 1e-9)
+            score = _tanh_score(norm_slope, center=0.0, scale=0.15)
+            return FactorResult(name, round(slope, 4), round(score, 3), True,
                                 f"EPS slope {slope:+.2f}/yr (negative base; CAGR unreliable)")
 
         cagr = (end / start) ** (1 / n) - 1
@@ -426,18 +431,19 @@ def factor_price_momentum_12m1m(price_csv_path: str, as_of_date: str) -> FactorR
         if series is None or len(series) < 22:
             return FactorResult(name, None, None, False, "insufficient price history")
 
-        p_now  = series.iloc[-1]
         p_1m   = series.iloc[-22] if len(series) >= 22 else series.iloc[0]
         p_12m  = series.iloc[-252] if len(series) >= 252 else series.iloc[0]
 
-        mom_12m = (p_now - p_12m) / (p_12m + 1e-12)
-        mom_1m  = (p_now - p_1m)  / (p_1m  + 1e-12)
-        mom     = mom_12m - mom_1m   # skip-1 momentum
+        # Exact Jegadeesh-Titman 12-1: the return from ~12 months ago to ~1
+        # month ago (skip the most recent month), i.e. P_{t-21}/P_{t-252} - 1.
+        # The previous `mom_12m - mom_1m` simple-return subtraction only equals
+        # this for log returns and drifts on large moves.
+        mom = (p_1m / (p_12m + 1e-12)) - 1.0
 
         score = _tanh_score(mom, center=0.0, scale=0.20)
         return FactorResult(
             name, round(mom, 4), round(score, 3), True,
-            f"12m-1m price momentum = {mom:+.1%} (raw 12m={mom_12m:+.1%}, 1m={mom_1m:+.1%})"
+            f"12m-1m price momentum = {mom:+.1%} (P[-252]→P[-21], skip last month)"
         )
     except Exception as e:
         return FactorResult(name, None, None, False, f"computation error: {e}")

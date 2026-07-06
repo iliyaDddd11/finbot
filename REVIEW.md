@@ -43,11 +43,24 @@ mixing adjusted and raw price sources makes any split-spanning return wrong.
 > `calendarYear`) is left latent because `test_auto_detects_calendarYear_column`
 > relies on `calendarYear` holding full dates.
 >
-> **Follow-ups (Phase 2+):** MEDIUM/LOW items #18–#26, cost-netting, portfolio
-> wiring. One pre-existing test failure remains in off-path `portfolio_construction`
-> (`test_gross_cap_flag_set_when_scaled`) — the sector cap absorbs gross before the
-> gross cap triggers, so the test's expectation is wrong; fixed as part of Phase 2
-> net-neutrality work.
+> **Phase 2 — fixed with regression tests:** **cost-netting** (`net_sharpe_ratio`,
+> `avg_net_return`, `avg_turnover` on turnover-based costs, surfaced in the
+> scorecard + markdown report), **#18** (exact skip-month 12-1 momentum
+> `P[-22]/P[-252]-1`), **#19** (EPS negative-base slope normalized by EPS
+> magnitude, centered at 0), **#20** (`construct_portfolio(net_neutral=True)`
+> balances the long/short legs; the pre-existing off-path
+> `test_gross_cap_flag_set_when_scaled` was corrected — it conflated the sector cap
+> with the gross cap), **#21** (signed book Sharpe uses rf=0, self-financing),
+> **#22** (`portfolio_turnover` is per-name, date-sorted), **#23** (report
+> "avg_signed" mislabel → "avg_realized"), **#26** (IC uses the continuous
+> composite score when present).
+>
+> **Remaining (Phase 3+):** wiring the *constructed book weights* (position/sector/
+> gross caps + sizing) into the scored return path instead of equal-weighting —
+> deferred because it needs a live end-to-end pipeline run to validate; the typed
+> config object, no-network integration test, CI, and `quant_eval` README (Phase 3);
+> and the review-gated report-generator / web-app hardening (Phase 5). The whole
+> test suite is green (**216 passed**).
 
 ---
 

@@ -76,6 +76,11 @@ def write_markdown_report(
     lines.append(f"| Sharpe ratio (annualised) | {_fmt_signed(sh)} &nbsp; 95% CI [{_fmt_float(sh_ci[0] if sh_ci else None)}, {_fmt_float(sh_ci[1] if sh_ci else None)}] |")
     lines.append(f"| Max drawdown | {_fmt_pct(scorecard.get('max_drawdown'))} |")
     lines.append(f"| Calmar ratio | {_fmt_signed(scorecard.get('calmar_ratio'))} |")
+    nsh = scorecard.get('net_sharpe_ratio')
+    rtb = scorecard.get('round_trip_bps')
+    lines.append(f"| Net Sharpe (after {_fmt_float(rtb)}bps) | {_fmt_signed(nsh)} |")
+    lines.append(f"| Avg net return / period | {_fmt_pct(scorecard.get('avg_net_return'))} |")
+    lines.append(f"| Avg turnover / period | {_fmt_pct(scorecard.get('avg_turnover'))} |")
     lines.append(f"| Mean IC | {_fmt_float(scorecard.get('mean_ic'))} |")
     lines.append(f"| ICIR | {_fmt_float(scorecard.get('icir'))} |")
     lines.append(f"| IC periods | {scorecard.get('ic_periods', 0)} |")
@@ -159,7 +164,7 @@ def write_markdown_report(
         lines.append(
             f"- `{item['pattern_signature']}` → count={item['count']}, "
             f"hit={_fmt_pct(item['right_rate'])}, "
-            f"avg_signed={_fmt_pct(item['avg_realized_return'])}, "
+            f"avg_realized={_fmt_pct(item['avg_realized_return'])}, "
             f"conf={_fmt_pct(item['avg_confidence'])}"
         )
     if not scorecard.get("patterns", {}).get("right_patterns"):

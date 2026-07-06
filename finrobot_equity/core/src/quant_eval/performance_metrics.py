@@ -33,7 +33,7 @@ def information_coefficient(
     Rank-correlation of signal direction with realised return.
     Returns None if insufficient data or all-zero variance.
     """
-    signal_dir = _to_numeric_signal(signals)
+    signal_dir = _signal_to_numeric(signals)
     returns    = pd.to_numeric(realized_returns, errors="coerce")
 
     mask = signal_dir.notna() & returns.notna()
@@ -62,9 +62,13 @@ def ic_series(df: pd.DataFrame) -> pd.Series:
     if "as_of_date" not in df.columns:
         return pd.Series(dtype=float)
 
+    # Prefer the continuous composite score over the discrete {-1,0,1} action —
+    # a rank correlation on 3 buckets is far coarser than on the raw signal.
+    signal_col = "composite_score" if "composite_score" in df.columns else "signal"
+
     results = {}
     for date, grp in df.groupby("as_of_date"):
-        ic = information_coefficient(grp["signal"], grp.get("realized_return", pd.Series()))
+        ic = information_coefficient(grp[signal_col], grp.get("realized_return", pd.Series()))
         if ic is not None:
             results[date] = ic
 
@@ -171,11 +175,15 @@ def turnover(signals: pd.Series) -> Optional[float]:
 def compute_full_scorecard(
     df: pd.DataFrame,
     periods_per_year: int = 6,
+    round_trip_bps: float = 20.0,
 ) -> dict:
     """
     Full quant scorecard from a scored predictions DataFrame.
     DataFrame must have columns:
       signal, realized_return, outcome_label, confidence, as_of_date
+
+    round_trip_bps: assumed round-trip transaction cost used to report
+    net-of-cost performance alongside the gross figures.
     """
     known = df[df["outcome_label"].isin(["right", "wrong"])].copy()
     has_returns = "realized_return" in df.columns
@@ -187,9 +195,13 @@ def compute_full_scorecard(
         # Portfolio return per rebalance date — the correct basis for Sharpe /
         # drawdown / Calmar (see portfolio_period_returns).
         port    = portfolio_period_returns(df)
+        net     = net_period_returns(df, round_trip_bps)
+        turn    = portfolio_turnover(df)
     else:
         signed = pd.Series(dtype=float)
         port   = pd.Series(dtype=float)
+        net    = pd.Series(dtype=float)
+        turn   = pd.Series(dtype=float)
 
     ic_s = ic_series(df) if has_returns else pd.Series(dtype=float)
 
@@ -205,9 +217,15 @@ def compute_full_scorecard(
         # Return metrics
         "avg_realized_return": _safe_mean(pd.to_numeric(df.get("realized_return", pd.Series()), errors="coerce")),
         "avg_signed_return":   _safe_mean(signed),
-        "sharpe_ratio":        sharpe_ratio(port, periods_per_year),
+        # A signed long/short book is self-financing, so no risk-free drag (#21).
+        "sharpe_ratio":        sharpe_ratio(port, periods_per_year, risk_free=0.0),
         "max_drawdown":        max_drawdown(port),
         "calmar_ratio":        calmar_ratio(port, periods_per_year),
+        # Net-of-cost performance (round_trip_bps applied to per-period turnover)
+        "avg_turnover":        _safe_mean(turn),
+        "avg_net_return":      _safe_mean(net),
+        "net_sharpe_ratio":    sharpe_ratio(net, periods_per_year, risk_free=0.0),
+        "round_trip_bps":      float(round_trip_bps),
         # IC metrics
         "mean_ic":             float(ic_s.mean()) if not ic_s.empty else None,
         "icir":                icir(ic_s, periods_per_year),
@@ -262,6 +280,18 @@ def _to_numeric_signal(series: pd.Series) -> pd.Series:
     return series.astype(str).str.lower().map(_SIGNAL_MAP)
 
 
+def _signal_to_numeric(series: pd.Series) -> pd.Series:
+    """
+    Convert a signal column to numeric. If it is already numeric (e.g. a
+    continuous composite_score), use it as-is; otherwise map the discrete
+    long/short/neutral labels to +1/-1/0.
+    """
+    num = pd.to_numeric(series, errors="coerce")
+    if len(series) and num.notna().mean() >= 0.5:
+        return num
+    return _to_numeric_signal(series)
+
+
 def portfolio_period_returns(df: pd.DataFrame) -> pd.Series:
     """
     Collapse per-(ticker, date) signed returns into ONE portfolio return per
@@ -283,6 +313,49 @@ def portfolio_period_returns(df: pd.DataFrame) -> pd.Series:
     if tmp.empty:
         return pd.Series(dtype=float)
     return tmp.groupby("as_of_date")["signed"].mean().sort_index()
+
+
+def portfolio_turnover(df: pd.DataFrame) -> pd.Series:
+    """
+    One-way turnover per rebalance date for the equal-weight signed book
+    (weight_i = signal_dir_i / n_names_that_date, consistent with
+    portfolio_period_returns). Turnover_t = 0.5 * sum_i |w_{t,i} - w_{t-1,i}|;
+    the first date establishes the book from cash (w_{-1}=0). Indexed by date.
+    """
+    if "as_of_date" not in df.columns:
+        return pd.Series(dtype=float)
+    tmp = pd.DataFrame({
+        "as_of_date": df["as_of_date"].values,
+        "ticker":     df["ticker"].values if "ticker" in df.columns else range(len(df)),
+        "dir":        _to_numeric_signal(df["signal"]).values,
+    }).dropna(subset=["dir"])
+    if tmp.empty:
+        return pd.Series(dtype=float)
+    dates = sorted(tmp["as_of_date"].unique())
+    prev: dict = {}
+    out: dict = {}
+    for d in dates:
+        grp = tmp[tmp["as_of_date"] == d]
+        n = len(grp)
+        cur = {t: float(dr) / n for t, dr in zip(grp["ticker"], grp["dir"])} if n else {}
+        names = set(cur) | set(prev)
+        out[d] = 0.5 * sum(abs(cur.get(t, 0.0) - prev.get(t, 0.0)) for t in names)
+        prev = cur
+    return pd.Series(out).sort_index()
+
+
+def net_period_returns(df: pd.DataFrame, round_trip_bps: float) -> pd.Series:
+    """
+    Gross per-period portfolio returns minus transaction costs:
+    cost_t = turnover_t * (round_trip_bps / 10_000). Returns a date-indexed
+    net-return series aligned to portfolio_period_returns.
+    """
+    gross = portfolio_period_returns(df)
+    if gross.empty:
+        return gross
+    turn = portfolio_turnover(df).reindex(gross.index).fillna(0.0)
+    cost = turn * (round_trip_bps / 10_000.0)
+    return gross - cost
 
 
 def _safe_mean(series: pd.Series) -> Optional[float]:

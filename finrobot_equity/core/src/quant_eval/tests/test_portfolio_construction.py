@@ -196,12 +196,18 @@ class TestGrossExposureCap:
             assert "gross_cap" not in p.capped_by
 
     def test_gross_cap_flag_set_when_scaled(self):
+        # Isolate the gross-exposure cap from the sector cap: these synthetic
+        # STOCK{i} tickers all fall in the "unknown" sector, so with the default
+        # 30% sector cap gross is trimmed to 0.30 and the gross cap never binds.
+        # Raise the sector cap so 20 × 0.10 = 2.0 gross must be scaled to 1.5.
         signals, sizes = self._make_n_signals(20, 0.10)
-        result = construct_portfolio(signals, sizes)
-        if result:
-            # At least some positions should have gross_cap flag
-            capped = [p for p in result if "gross_cap" in p.capped_by]
-            assert len(capped) > 0
+        result = construct_portfolio(signals, sizes, max_sector=10.0)
+        assert result
+        capped = [p for p in result if "gross_cap" in p.capped_by]
+        assert len(capped) > 0
+        # And gross is actually at the cap
+        gross = sum(abs(p.final_weight) for p in result)
+        assert gross <= MAX_GROSS_EXPOSURE + 1e-4
 
 
 # ---------------------------------------------------------------------------
