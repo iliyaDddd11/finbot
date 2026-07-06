@@ -128,9 +128,13 @@ def net_return_after_tc(
     -------
     float : net return in decimal
     """
+    # Transaction cost is always a cost: it reduces the net return of a trade
+    # regardless of side (the `direction` arg is kept for API compatibility).
+    # A long earning +5% gross nets +5% - tc; a short earning +5% gross (i.e.
+    # the underlying fell) also nets +5% - tc.  Subtracting a signed cost would
+    # credit shorts the round-trip cost and overstate every short by 2*tc.
     tc_decimal = tc.round_trip_bps / 10_000
-    sign = 1 if direction == "long" else -1
-    return gross_return - sign * tc_decimal
+    return gross_return - tc_decimal
 
 
 def tc_summary_line(tc: TCEstimate) -> str:

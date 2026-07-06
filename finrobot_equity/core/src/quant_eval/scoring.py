@@ -44,7 +44,10 @@ def enrich_scored_predictions(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def compute_scorecard(scored_df: pd.DataFrame) -> dict[str, Any]:
+def compute_scorecard(scored_df: pd.DataFrame, periods_per_year: int = 12) -> dict[str, Any]:
+    # periods_per_year defaults to 12 because the walk-forward grid is monthly
+    # (date_grid.build_month_end_grid uses freq="ME").  Annualised Sharpe / ICIR
+    # / Calmar are only correct when this matches the true rebalance cadence.
     if scored_df.empty:
         return {
             "num_predictions": 0,
@@ -75,7 +78,7 @@ def compute_scorecard(scored_df: pd.DataFrame) -> dict[str, Any]:
     }
 
     # Add professional quant metrics (IC, ICIR, Sharpe, max_drawdown, Calmar)
-    quant = _quant_scorecard(scored_df)
+    quant = _quant_scorecard(scored_df, periods_per_year=periods_per_year)
     metrics["sharpe_ratio"]   = quant.get("sharpe_ratio")
     metrics["max_drawdown"]   = quant.get("max_drawdown")
     metrics["calmar_ratio"]   = quant.get("calmar_ratio")
@@ -97,7 +100,7 @@ def compute_scorecard(scored_df: pd.DataFrame) -> dict[str, Any]:
         metrics["avg_alpha_return"]     = None
 
     # Bootstrap 95% confidence intervals
-    add_bootstrap_cis(metrics, scored_df)
+    add_bootstrap_cis(metrics, scored_df, periods_per_year=periods_per_year)
 
     by_signal = {}
     for signal, signal_df in scored_df.groupby(scored_df["signal"].astype(str).str.lower()):

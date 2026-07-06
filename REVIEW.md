@@ -15,6 +15,20 @@ committed source. See **[PLAN.md](PLAN.md)** for the remediation roadmap; the
 trusted as-is: the cross-sectional scoring silently **inverts two factors**, and
 mixing adjusted and raw price sources makes any split-spanning return wrong.
 
+> **Remediation status (this branch).** Fixed with regression tests:
+> **#1** (z-score the direction-normalized score), **#3** (monthly annualization,
+> `periods_per_year=12` + `--periods-per-year` flag), **#4** (per-period portfolio
+> Sharpe/drawdown/Calmar + `max_drawdown` seeded at 1.0), **#5/#6** (realized
+> return is `None` not `0.0`; partial horizons flagged via `horizon_complete`),
+> **#7** (anchor download starts before `as_of_date`), **#8** (TC subtracted on
+> both sides). A pre-existing broken valuation-factor test fixture was also
+> corrected. **Not yet addressed** (follow-ups): **#2** (needs a live
+> Dukascopy-vs-Yahoo adjustment check), and the MEDIUM/LOW items #9–#28. One
+> pre-existing test failure remains in off-path `portfolio_construction`
+> (`test_gross_cap_flag_set_when_scaled`) — the sector cap absorbs gross before
+> the gross cap triggers, so the test's expectation is wrong; left for the P2
+> portfolio work.
+
 ---
 
 ## CRITICAL

@@ -39,6 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=None, help="Directory for scored outputs. Default: <walkforward-root>/scorecard")
     parser.add_argument("--neutral-band", type=float, default=0.02, help="Neutral calls inside this realized return band count as right.")
     parser.add_argument("--min-pattern-count", type=int, default=2)
+    parser.add_argument("--periods-per-year", type=int, default=12,
+                        help="Rebalance frequency for annualising Sharpe/ICIR/Calmar. "
+                             "Default 12 (the walk-forward grid is monthly).")
     parser.add_argument("--skip-price-download", action="store_true", help="Only score rows that already have realized_return columns.")
     parser.add_argument("--horizons", nargs="+", type=int, default=[30, 60, 90],
                         help="Horizon days for IC decay analysis (default: 30 60 90)")
@@ -130,7 +133,7 @@ def main(argv: list[str] | None = None) -> None:
     scored_df = pd.DataFrame(scored_rows)
     scored_df = enrich_scored_predictions(scored_df)
 
-    scorecard = compute_scorecard(scored_df)
+    scorecard = compute_scorecard(scored_df, periods_per_year=args.periods_per_year)
     scorecard["patterns"] = scorecard.get("patterns", {})
     scorecard["patterns"]["right_patterns"] = scorecard["patterns"].get("right_patterns", [])[: args.min_pattern_count * 5]
     scorecard["patterns"]["wrong_patterns"] = scorecard["patterns"].get("wrong_patterns", [])[: args.min_pattern_count * 5]

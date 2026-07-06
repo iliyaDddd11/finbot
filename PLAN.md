@@ -103,6 +103,10 @@ Node CLI) with a **Yahoo Finance** fallback; symbols are mapped in
 
 ## 5. Roadmap (prioritized by REVIEW.md)
 
+> **Update:** P0 items 1–5 and the #8 TC-sign fix are **implemented on this
+> branch** with regression tests (`quant_eval/tests/test_p0_correctness_fixes.py`).
+> #2 (price adjustment) remains a follow-up pending a live data check.
+
 ### P0 — Correctness (metrics/signals are currently wrong; fix before trusting any output)
 1. **Fix cross-section z-score sign/semantics** (REVIEW #1). Z-score the
    direction-normalized `score` (or carry a per-factor sign + component

@@ -119,7 +119,11 @@ def max_drawdown(signed_returns: pd.Series) -> Optional[float]:
     if r.empty:
         return None
 
+    # Seed the equity curve at 1.0 (the pre-first-return peak) so a monotonic
+    # decline is measured from the start, not from the level after the first
+    # period.  Without this, [-0.10]*4 reports -27% instead of the true -34%.
     cum = (1 + r).cumprod()
+    cum = pd.concat([pd.Series([1.0]), cum], ignore_index=True)
     rolling_max = cum.cummax()
     dd = (cum - rolling_max) / rolling_max
     return float(dd.min())
@@ -176,12 +180,16 @@ def compute_full_scorecard(
     known = df[df["outcome_label"].isin(["right", "wrong"])].copy()
     has_returns = "realized_return" in df.columns
 
-    # Signed returns: signal direction × realized return
+    # Signed returns: signal direction × realized return (one row per bet)
     if has_returns:
         sig_dir = _to_numeric_signal(df["signal"])
         signed  = sig_dir * pd.to_numeric(df["realized_return"], errors="coerce")
+        # Portfolio return per rebalance date — the correct basis for Sharpe /
+        # drawdown / Calmar (see portfolio_period_returns).
+        port    = portfolio_period_returns(df)
     else:
         signed = pd.Series(dtype=float)
+        port   = pd.Series(dtype=float)
 
     ic_s = ic_series(df) if has_returns else pd.Series(dtype=float)
 
@@ -197,9 +205,9 @@ def compute_full_scorecard(
         # Return metrics
         "avg_realized_return": _safe_mean(pd.to_numeric(df.get("realized_return", pd.Series()), errors="coerce")),
         "avg_signed_return":   _safe_mean(signed),
-        "sharpe_ratio":        sharpe_ratio(signed, periods_per_year),
-        "max_drawdown":        max_drawdown(signed),
-        "calmar_ratio":        calmar_ratio(signed, periods_per_year),
+        "sharpe_ratio":        sharpe_ratio(port, periods_per_year),
+        "max_drawdown":        max_drawdown(port),
+        "calmar_ratio":        calmar_ratio(port, periods_per_year),
         # IC metrics
         "mean_ic":             float(ic_s.mean()) if not ic_s.empty else None,
         "icir":                icir(ic_s, periods_per_year),
@@ -217,6 +225,8 @@ def compute_full_scorecard(
             s_dir = _to_numeric_signal(g["signal"])
             s_ret = pd.to_numeric(g.get("realized_return", pd.Series()), errors="coerce")
             sg    = s_dir * s_ret
+            # Per-ticker Sharpe is a time series → date-sorted, one return/period.
+            sg_ts = portfolio_period_returns(g)
             known_g = g[g["outcome_label"].isin(["right", "wrong"])]
             n_r = (known_g["outcome_label"] == "right").sum()
             n_k = len(known_g)
@@ -224,7 +234,7 @@ def compute_full_scorecard(
                 "n":           int(len(g)),
                 "hit_rate":    round(n_r / n_k, 4) if n_k else None,
                 "avg_signed":  _safe_mean(sg),
-                "sharpe":      sharpe_ratio(sg, periods_per_year),
+                "sharpe":      sharpe_ratio(sg_ts, periods_per_year),
             }
         result["by_ticker"] = by_ticker
 
@@ -250,6 +260,29 @@ _SIGNAL_MAP = {"long": 1, "short": -1, "neutral": 0}
 
 def _to_numeric_signal(series: pd.Series) -> pd.Series:
     return series.astype(str).str.lower().map(_SIGNAL_MAP)
+
+
+def portfolio_period_returns(df: pd.DataFrame) -> pd.Series:
+    """
+    Collapse per-(ticker, date) signed returns into ONE portfolio return per
+    rebalance date: the equal-weighted mean signed return across names on that
+    date, indexed and sorted by ``as_of_date``.
+
+    Sharpe / drawdown / Calmar must be computed on this time series, not on the
+    pooled per-row returns — otherwise the "return stream" is a pile of
+    independent single-name bets in arbitrary DataFrame order, which makes
+    drawdown order-dependent and turns the Sharpe denominator into
+    cross-sectional dispersion rather than portfolio volatility.
+    """
+    if "realized_return" not in df.columns:
+        return pd.Series(dtype=float)
+    signed = _to_numeric_signal(df["signal"]) * pd.to_numeric(df["realized_return"], errors="coerce")
+    if "as_of_date" not in df.columns:
+        return signed.dropna().reset_index(drop=True)
+    tmp = pd.DataFrame({"as_of_date": df["as_of_date"].values, "signed": signed.values}).dropna(subset=["signed"])
+    if tmp.empty:
+        return pd.Series(dtype=float)
+    return tmp.groupby("as_of_date")["signed"].mean().sort_index()
 
 
 def _safe_mean(series: pd.Series) -> Optional[float]:
@@ -343,13 +376,16 @@ def add_bootstrap_cis(
     """
     sig_dir = _to_numeric_signal(df["signal"])
     signed  = sig_dir * pd.to_numeric(df.get("realized_return", pd.Series()), errors="coerce")
+    # Sharpe is a property of the portfolio return time series, so bootstrap the
+    # per-period portfolio returns (consistent with compute_full_scorecard).
+    port = portfolio_period_returns(df) if "realized_return" in df.columns else pd.Series(dtype=float)
 
     # Hit rate CI
     hr_lo, hr_hi = bootstrap_hit_rate_ci(df.get("outcome_label", pd.Series()), n_boot=n_boot)
     scorecard["hit_rate_ci_95"] = [hr_lo, hr_hi]
 
     # Sharpe CI
-    sh_lo, sh_hi = bootstrap_sharpe_ci(signed, periods_per_year, n_boot=n_boot)
+    sh_lo, sh_hi = bootstrap_sharpe_ci(port, periods_per_year, n_boot=n_boot)
     scorecard["sharpe_ci_95"] = [sh_lo, sh_hi]
 
     # Mean signed return CI
