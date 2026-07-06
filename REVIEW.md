@@ -55,12 +55,18 @@ mixing adjusted and raw price sources makes any split-spanning return wrong.
 > "avg_signed" mislabel → "avg_realized"), **#26** (IC uses the continuous
 > composite score when present).
 >
-> **Remaining (Phase 3+):** wiring the *constructed book weights* (position/sector/
-> gross caps + sizing) into the scored return path instead of equal-weighting —
-> deferred because it needs a live end-to-end pipeline run to validate; the typed
-> config object, no-network integration test, CI, and `quant_eval` README (Phase 3);
-> and the review-gated report-generator / web-app hardening (Phase 5). The whole
-> test suite is green (**216 passed**).
+> **Phase 3 — done:** typed `EvalConfig` (grid frequency → `periods_per_year`,
+> horizons, cost, seed) with tests; a no-network end-to-end integration test
+> (`tests/test_integration_pipeline.py`) that runs predict→score on synthetic
+> fixtures and asserts direction integrity + net≤gross; a CI workflow
+> (`.github/workflows/quant_eval-ci.yml`); and a `quant_eval/README.md`.
+>
+> **Remaining:** wiring the *constructed book weights* (position/sector/gross caps
+> + sizing) into the scored return path instead of equal-weighting — deferred
+> because it needs a live end-to-end pipeline run to validate; adopting `EvalConfig`
+> throughout both drivers; Phase 4 research studies; and the review-gated
+> report-generator / web-app hardening (Phase 5). The whole test suite is green
+> (**226 passed**).
 
 ---
 
