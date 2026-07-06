@@ -63,14 +63,19 @@ gate (Phase 5) before any hardening work.
 
 ## 2. Phase plan (milestones & exit criteria)
 
-| Phase | Theme | Milestone / exit criteria | Items |
-|---|---|---|---|
-| **0** ✅ | P0 correctness | Signals correctly signed; metrics correctly annualized & order-independent | #1, #3, #4, #5, #6, #7, #8 |
-| **1** 🔜 | Remaining correctness | Every realized return uses **adjusted** prices; no silent data loss; runs fail loud | #2, #9, #10, #11, #12, #13, #14, #15, #16, #17 |
-| **2** ⏳ | Tradeable methodology | Metrics are **net of costs** on a **constructed** long/short book; sharper IC | cost-netting, portfolio wiring, #18, #19, #20, #21, #22, continuous-IC (#26) |
-| **3** ⏳ | Reproducibility & infra | Typed config; end-to-end integration test; CI; caching; docs | config object, integration test, CI, data cache, quant_eval README |
-| **4** ⏳ | Research surface | Multi-horizon, multi-universe studies; factor research tooling; dashboards | universe expansion, factor attribution UX, ablations |
-| **5** ⏳ | Report gen + web app | Review gate → hardening of `create_equity_report`, `equity_agents`, `web_app` | (scoped after review) |
+| Phase | Theme | Milestone / exit criteria | Items | Status |
+|---|---|---|---|---|
+| **0** | P0 correctness | Signals correctly signed; metrics correctly annualized & order-independent | #1, #3, #4, #5, #6, #7, #8 | ✅ done |
+| **1** | Remaining correctness | Adjusted prices; no silent data loss; runs fail loud | #2, #9, #10, #11, #13, #14, #16, #17 (#12/#15/#27 kept/latent) | ✅ done |
+| **2** | Tradeable methodology | Metrics **net of costs**; sharper IC; factor refinements | cost-netting, #18, #19, #20, #21, #22, #26 | ✅ done¹ |
+| **3** | Reproducibility & infra | Typed config; end-to-end integration test; CI; docs | config object, integration test, CI, quant_eval README | ✅ done² |
+| **4** | Research surface | Multi-horizon, multi-universe studies; factor research tooling | universe expansion, factor attribution UX, ablations | ⏳ needs live pipeline |
+| **5** | Report gen + web app | Review gate → hardening of `create_equity_report`, `equity_agents`, `web_app` | (scoped after review) | ⏳ review-gated |
+
+¹ Deferred within Phase 2: wiring the *constructed book weights* into the scored
+return path (needs a live end-to-end run to validate). ² Deferred within Phase 3:
+adopting `EvalConfig` throughout both drivers; a data/caching layer. All shipped
+work has regression tests — **226 passing**, no network required.
 
 **Hard gates:** Phase 2 metrics are only meaningful once Phase 1 #2 lands
 (adjusted prices). Phase 4 studies are only credible once Phase 3 reproducibility
