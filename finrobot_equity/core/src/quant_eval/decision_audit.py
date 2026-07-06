@@ -120,7 +120,10 @@ def load_text_sections(analysis_dir: str) -> dict[str, str]:
 
 
 def classify_outcome(signal: str, realized_return: float | None, neutral_band: float = 0.02) -> str:
-    if realized_return is None:
+    # Treat NaN like a missing return: a float NaN is not None, so without this
+    # guard `NaN > 0` (False) would silently label a call "wrong" and inflate
+    # the right_rate denominator with spurious losses.
+    if realized_return is None or pd.isna(realized_return):
         return "unknown"
     signal = str(signal or "neutral").lower()
     if signal == "long":

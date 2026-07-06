@@ -95,7 +95,18 @@ def load_dukascopy_csv(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     if "timestamp" not in df.columns:
         raise ValueError(f"Unexpected Dukascopy CSV schema in {csv_path}. Missing 'timestamp' column.")
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    # dukascopy-node may emit either integer epoch-milliseconds or ISO-8601
+    # strings depending on version/flags — detect rather than assume "ms".
+    ts = df["timestamp"]
+    if pd.api.types.is_numeric_dtype(ts):
+        df["timestamp"] = pd.to_datetime(ts, unit="ms", utc=True)
+    else:
+        parsed = pd.to_datetime(ts, utc=True, errors="coerce")
+        if parsed.isna().all():
+            raise ValueError(
+                f"Could not parse 'timestamp' column in {csv_path} as epoch-ms or ISO-8601."
+            )
+        df["timestamp"] = parsed
     return df
 
 
@@ -105,15 +116,28 @@ def load_price_frame(
     end_date: str,
     download_dir: str,
     timeframe: str = "d1",
+    prefer_adjusted: bool = True,
 ) -> pd.DataFrame:
     """
     Load daily price data for `symbol`.
 
-    Primary source: Dukascopy (for tickers in EXPLICIT_DUKASCOPY_MAP).
-    Fallback:       Yahoo Finance (for all other US equity tickers).
+    Sources:
+      - Yahoo Finance returns split/dividend-**adjusted** prices (auto_adjust).
+      - Dukascopy returns **raw, unadjusted** prices.
+
+    Mixing the two corrupts any return over a window that contains a split
+    (e.g. a 10:1 split turns a +7% move into ~-89%), and biases alpha by the
+    dividend yield.  To keep every computed return on one consistent basis,
+    ``prefer_adjusted`` (default True) routes ALL equities through the adjusted
+    Yahoo feed — including tickers in EXPLICIT_DUKASCOPY_MAP.  Set it False only
+    when you explicitly want raw Dukascopy prices (e.g. FX, or intraday work
+    where corporate actions don't apply).
+
+    The returned frame carries a ``price_adjusted`` boolean column so callers
+    can assert consistency (see realized_returns).
     """
     normalized = normalize_symbol(symbol)
-    use_dukascopy = normalized in EXPLICIT_DUKASCOPY_MAP
+    use_dukascopy = (normalized in EXPLICIT_DUKASCOPY_MAP) and not prefer_adjusted
 
     if use_dukascopy:
         csv_path = run_dukascopy_download(
@@ -126,9 +150,10 @@ def load_price_frame(
         df = load_dukascopy_csv(csv_path)
         df["symbol"] = symbol.upper()
         df["source_csv"] = os.path.abspath(csv_path)
+        df["price_adjusted"] = False
         return df
 
-    # Yahoo Finance fallback — same output schema
+    # Adjusted Yahoo feed — same output schema
     return load_price_frame_yahoo(
         symbol=symbol,
         start_date=start_date,

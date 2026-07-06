@@ -61,6 +61,7 @@ def construct_portfolio(
     max_sector:   float = MAX_SECTOR_WEIGHT,
     max_gross:    float = MAX_GROSS_EXPOSURE,
     min_conf:     float = MIN_CONFIDENCE_GATE,
+    net_neutral:  bool = False,
 ) -> list[PortfolioPosition]:
     """
     Build a diversified portfolio from signal + sizing inputs.
@@ -73,6 +74,9 @@ def construct_portfolio(
     max_sector      : Max sector weight (unsigned)
     max_gross       : Max gross exposure (sum of |weights|)
     min_conf        : Drop signals below this confidence
+    net_neutral     : If True, scale the long and short legs to equal gross so
+                      the book is dollar-neutral (net exposure ~0). No-op if
+                      either leg is empty.
 
     Returns
     -------
@@ -136,8 +140,21 @@ def construct_portfolio(
         for t, w in position_capped.items()
     }
 
-    # --- Step 5: assemble output ---
     candidate_map = {c["ticker"]: c for c in candidates}
+
+    # --- Step 4b: optional dollar-neutrality (balance long vs short legs) ---
+    net_neutral_applied = False
+    if net_neutral:
+        long_gross  = sum(w for t, w in final_weights.items() if candidate_map[t]["signal"] == "long")
+        short_gross = sum(w for t, w in final_weights.items() if candidate_map[t]["signal"] == "short")
+        if long_gross > 0 and short_gross > 0:
+            target = min(long_gross, short_gross)
+            for t, w in final_weights.items():
+                leg = long_gross if candidate_map[t]["signal"] == "long" else short_gross
+                final_weights[t] = round(w * (target / leg), 4)
+            net_neutral_applied = abs(long_gross - short_gross) > 1e-9
+
+    # --- Step 5: assemble output ---
     positions: list[PortfolioPosition] = []
     for c in candidates:
         t = c["ticker"]
@@ -151,6 +168,8 @@ def construct_portfolio(
             capped_by.append("position_cap")
         if gross_scale < 0.999:
             capped_by.append("gross_cap")
+        if net_neutral_applied:
+            capped_by.append("net_neutral")
 
         signed_weight = fw if c["signal"] == "long" else -fw
         positions.append(PortfolioPosition(

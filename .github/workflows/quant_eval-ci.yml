@@ -1,0 +1,30 @@
+name: quant_eval CI
+
+on:
+  push:
+    paths:
+      - "finrobot_equity/core/src/quant_eval/**"
+      - "finrobot_equity/core/src/run_walkforward_eval.py"
+      - "finrobot_equity/core/src/score_walkforward_eval.py"
+      - ".github/workflows/quant_eval-ci.yml"
+  pull_request:
+    paths:
+      - "finrobot_equity/core/src/quant_eval/**"
+      - "finrobot_equity/core/src/run_walkforward_eval.py"
+      - "finrobot_equity/core/src/score_walkforward_eval.py"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: finrobot_equity/core/src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install pandas numpy scipy pytest
+      - name: Run quant_eval test suite (no network)
+        run: python -m pytest quant_eval/tests -q

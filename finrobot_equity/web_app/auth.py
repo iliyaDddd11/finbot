@@ -96,7 +96,14 @@ def authenticate_user(email: str, password: str) -> Optional[User]:
         
         if not crud.verify_password(password, user.password_hash):
             return None
-        
+
+        # Transparently upgrade a legacy (unsalted SHA-256) hash to PBKDF2.
+        if crud.needs_rehash(user.password_hash):
+            try:
+                crud.update_user_password(db, user, password)
+            except Exception:
+                pass
+
         return user
     finally:
         db.close()
@@ -108,6 +115,12 @@ def register_user(
     name: str
 ) -> Optional[User]:
     """Register a new user"""
+    # OAuth users are stored under a reserved "github:" email namespace. Block
+    # local registration of that namespace so an attacker can't pre-create
+    # `github:victim@…` and have the victim's later GitHub login merge into it.
+    if str(email).strip().lower().startswith("github:"):
+        return None
+
     db = SessionLocal()
     try:
         # Check if user exists

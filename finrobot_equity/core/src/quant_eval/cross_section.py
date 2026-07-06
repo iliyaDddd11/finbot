@@ -6,6 +6,15 @@ whether the peer universe averages 20% or 55%.  With this, every factor is
 z-scored across the live universe on each evaluation date, making all signals
 relative — which is how systematic equity research works in practice.
 
+IMPORTANT — we z-score the direction-normalised ``score`` (already in ~[-2, +2]
+with the correct sign, and already blending level + trend for multi-component
+factors), NOT the raw metric.  The raw metric is merely descriptive: for
+``leverage`` a higher raw Net-Debt/EBITDA is *bearish* and for
+``ev_ebitda_vs_history`` a higher raw multiple is *bearish*, while for ROIC it is
+bullish.  Z-scoring the raw value would therefore silently invert those factors
+and would drop the trend component of margin_quality / roic.  Z-scoring the
+score keeps every factor pointed the right way.
+
 Flow
 ----
 1. Caller collects raw FactorResult objects for all tickers at one date.
@@ -48,11 +57,12 @@ def zscore_factor_bank(
     factor_names = list(next(iter(ticker_raw_factors.values())).keys()) if ticker_raw_factors else []
     tickers = list(ticker_raw_factors.keys())
 
-    # Collect raw values per factor
+    # Collect direction-normalised scores per factor (NOT raw metrics — see the
+    # module docstring: z-scoring raw_value would invert leverage / valuation).
     raw: dict[str, dict[str, float | None]] = {f: {} for f in factor_names}
     for ticker in tickers:
         for fname, fr in ticker_raw_factors[ticker].items():
-            raw[fname][ticker] = fr.raw_value if fr.available and fr.raw_value is not None else None
+            raw[fname][ticker] = fr.score if fr.available and fr.score is not None else None
 
     # Z-score each factor
     zscores: dict[str, dict[str, float | None]] = {f: {t: None for t in tickers} for f in factor_names}

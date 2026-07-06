@@ -509,11 +509,17 @@ def get_enhanced_company_news(ticker: str, api_key: str, days_back: int = 5,
         }
         
     except Exception as e:
-        logger.error(f"Error fetching enhanced news: {e}")
+        # requests exceptions often embed the full request URL, which carries
+        # the FMP apikey query param. Redact it from both the log and any text
+        # that could be rendered into the report.
+        msg = str(e)
+        if api_key:
+            msg = msg.replace(api_key, "[REDACTED_API_KEY]")
+        logger.error(f"Error fetching enhanced news for {ticker}: {msg}")
         return {
             'ticker': ticker,
             'articles': [],
-            'summary': f"Error fetching news for {ticker}: {str(e)}",
+            'summary': f"No recent news could be retrieved for {ticker}.",
             'categorized': {},
             'sentiment_overview': {'positive': 0, 'negative': 0, 'neutral': 0}
         }

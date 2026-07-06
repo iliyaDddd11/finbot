@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import re
 import pandas as pd
 from datetime import datetime
 import pytz
@@ -373,6 +374,14 @@ def main():
     parser.add_argument("--enhanced-news-file", type=str, default=None, help="Path to enhanced news JSON file.")
 
     args = parser.parse_args()
+
+    # Reject tickers that could escape the output tree (path traversal) or
+    # inject markup into filenames/HTML. Tickers are short alphanumerics.
+    if not re.fullmatch(r"[A-Za-z0-9.\-]{1,15}", args.company_ticker or ""):
+        parser.error(
+            f"Invalid --company-ticker {args.company_ticker!r}: expected 1-15 chars of "
+            "[A-Za-z0-9.-]."
+        )
 
     # --- Setup directories ---
     output_dir = args.output_dir or os.path.join(".", "output", args.company_ticker, "report")

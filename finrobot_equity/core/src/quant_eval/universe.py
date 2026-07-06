@@ -5,7 +5,7 @@ Organized by GICS sector. All names are US-listed, sufficient FMP coverage,
 and tradeable via the Dukascopy price feed.
 
 For meaningful cross-sectional IC computation you need >= 30 names per period.
-The DEFAULT_UNIVERSE provides 60 names across 9 sectors.
+The DEFAULT_UNIVERSE provides 61 names across 9 sectors.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ SECTORS: dict[str, list[str]] = {
         "PG", "KO", "PEP", "WMT", "COST", "PM", "MO",
     ],
     "consumer_discretionary": [
-        "MCD", "HD", "NKE", "SBUX", "TGT", "LOW",
+        "TSLA", "MCD", "HD", "NKE", "SBUX", "TGT", "LOW",
     ],
     "industrials": [
         "GE", "HON", "CAT", "BA", "UPS", "RTX",
@@ -44,7 +44,7 @@ SECTORS: dict[str, list[str]] = {
     ],
 }
 
-# Flat list (60 tickers)
+# Flat list (61 tickers)
 DEFAULT_UNIVERSE: list[str] = [t for tickers in SECTORS.values() for t in tickers]
 
 # Smaller curated set for quick tests (covers all sectors, ~20 names)

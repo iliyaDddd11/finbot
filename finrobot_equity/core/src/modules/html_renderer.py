@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import html
 import os
 import re as _re
 import pandas as pd
@@ -40,6 +41,10 @@ def _markdown_to_html(text: str) -> str:
     """将 markdown 文本转换为 HTML，支持标题、粗体、列表等。自动加粗关键数据。"""
     if not text:
         return ""
+    # Escape raw text FIRST so untrusted LLM/news content can't inject markup
+    # (stored XSS). Markdown syntax (**, ##, -, %) is untouched by html.escape,
+    # so the intended formatting below still works; literal <script> becomes inert.
+    text = html.escape(text, quote=False)
     lines = text.split('\n')
     html_lines = []
     in_list = False
@@ -471,7 +476,10 @@ def _format_value(val):
         elif 10 <= abs(val) < 100:
             return f"{val:.1f}"
         else:
-            return f"{val:.1f}x"
+            # 100 <= |val| < 1000. Do NOT append an "x" — this function has no
+            # way to know the value is a valuation multiple, and "250.0x" for a
+            # plain figure is a fabricated label.
+            return f"{val:.1f}"
     
     return val if pd.notna(val) else "-"
 
@@ -609,7 +617,9 @@ def _derive_rating(share_price, target_price, api_rating: str) -> str:
     try:
         price = float(str(share_price).replace('$', '').replace(',', ''))
         target = float(str(target_price).replace('$', '').replace(',', ''))
-        if price <= 0:
+        if price <= 0 or target <= 0:
+            # No usable target price (often defaulted to $0.00) — never derive a
+            # rating from it, or every such report shows a false "Sell".
             return api_rating or 'N/A'
         upside = (target - price) / price
         if upside >= 0.15:

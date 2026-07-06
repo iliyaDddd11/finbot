@@ -9,6 +9,7 @@ from quant_eval.performance_metrics import (
     compute_full_scorecard as _quant_scorecard,
     add_bootstrap_cis,
 )
+from quant_eval.transaction_costs import estimate_tc
 
 
 SIGNAL_DIRECTION = {"long": 1, "short": -1, "neutral": 0}
@@ -44,7 +45,16 @@ def enrich_scored_predictions(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def compute_scorecard(scored_df: pd.DataFrame) -> dict[str, Any]:
+def compute_scorecard(
+    scored_df: pd.DataFrame,
+    periods_per_year: int = 12,
+    min_pattern_count: int = 2,
+    round_trip_bps: float | None = None,
+) -> dict[str, Any]:
+    # periods_per_year defaults to 12 because the walk-forward grid is monthly
+    # (date_grid.build_month_end_grid uses freq="ME").  Annualised Sharpe / ICIR
+    # / Calmar are only correct when this matches the true rebalance cadence.
+    # min_pattern_count gates which decision patterns qualify (not just display).
     if scored_df.empty:
         return {
             "num_predictions": 0,
@@ -71,17 +81,26 @@ def compute_scorecard(scored_df: pd.DataFrame) -> dict[str, Any]:
         "confidence_calibration_error": _safe_mean(scored_df["confidence_error"]),
         "avg_max_upside":    _safe_mean(scored_df.get("max_upside", pd.Series(dtype=float))),
         "avg_max_drawdown":  _safe_mean(scored_df.get("max_drawdown", pd.Series(dtype=float))),
-        "patterns":          summarize_patterns(scored_df),
+        "patterns":          summarize_patterns(scored_df, min_count=min_pattern_count),
     }
 
     # Add professional quant metrics (IC, ICIR, Sharpe, max_drawdown, Calmar)
-    quant = _quant_scorecard(scored_df)
+    if round_trip_bps is None:
+        round_trip_bps = estimate_tc(liquidity_tier="large").round_trip_bps
+    quant = _quant_scorecard(
+        scored_df, periods_per_year=periods_per_year, round_trip_bps=round_trip_bps
+    )
     metrics["sharpe_ratio"]   = quant.get("sharpe_ratio")
     metrics["max_drawdown"]   = quant.get("max_drawdown")
     metrics["calmar_ratio"]   = quant.get("calmar_ratio")
     metrics["mean_ic"]        = quant.get("mean_ic")
     metrics["icir"]           = quant.get("icir")
     metrics["ic_periods"]     = quant.get("ic_periods", 0)
+    # Net-of-cost performance
+    metrics["avg_turnover"]     = quant.get("avg_turnover")
+    metrics["avg_net_return"]   = quant.get("avg_net_return")
+    metrics["net_sharpe_ratio"] = quant.get("net_sharpe_ratio")
+    metrics["round_trip_bps"]   = quant.get("round_trip_bps")
 
     # Benchmark-relative alpha metrics
     if "alpha_return" in scored_df.columns:
@@ -97,7 +116,7 @@ def compute_scorecard(scored_df: pd.DataFrame) -> dict[str, Any]:
         metrics["avg_alpha_return"]     = None
 
     # Bootstrap 95% confidence intervals
-    add_bootstrap_cis(metrics, scored_df)
+    add_bootstrap_cis(metrics, scored_df, periods_per_year=periods_per_year)
 
     by_signal = {}
     for signal, signal_df in scored_df.groupby(scored_df["signal"].astype(str).str.lower()):

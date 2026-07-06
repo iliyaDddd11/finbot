@@ -9,9 +9,34 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 
+def _redact_body(path: str, body: str) -> str:
+    """
+    Never persist secrets in the request-log table. Auth endpoints (login /
+    register / change-password) carry cleartext passwords, so their bodies are
+    dropped entirely; for other endpoints, known secret-bearing keys
+    (api keys, tokens, passwords) are redacted from the JSON.
+    """
+    if any(seg in path for seg in ("/auth/login", "/auth/register", "/auth/change-password")):
+        return "[redacted: auth endpoint]"
+    try:
+        data = json.loads(body)
+    except Exception:
+        return body
+    if not isinstance(data, dict):
+        return body
+    for k in list(data.keys()):
+        kl = k.lower()
+        if "password" in kl or "api_key" in kl or "apikey" in kl or "token" in kl or "secret" in kl:
+            data[k] = "[redacted]"
+    try:
+        return json.dumps(data)
+    except Exception:
+        return "[redacted]"
+
+
 class RequestLoggerMiddleware(BaseHTTPMiddleware):
     """Middleware to log all API requests to database"""
-    
+
     # Endpoints to skip logging (to avoid noise)
     SKIP_ENDPOINTS = [
         "/api/status/",  # Task status polling
@@ -67,7 +92,7 @@ class RequestLoggerMiddleware(BaseHTTPMiddleware):
             try:
                 body = await request.body()
                 if body and len(body) < 10000:  # Limit to 10KB
-                    request_body = body.decode("utf-8")[:5000]  # Limit stored size
+                    request_body = _redact_body(path, body.decode("utf-8")[:5000])
             except Exception:
                 pass
         

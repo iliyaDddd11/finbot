@@ -344,10 +344,17 @@ class TestEpsGrowth:
 
 class TestValuationVsHistory:
     def test_discount_to_history_bullish(self):
-        km = _key_metrics(ev_ebitda=8.0)   # current cheap vs rising history
+        # Build a history that was expensive and is now cheap: 10,9.5,9,8.5 then
+        # current 7.0 → current < median → discount to own history → bullish.
+        # (The _key_metrics helper only produces a rising series, whose *current*
+        # row is the most expensive — a premium — so it is unsuitable here.)
+        rows = [{"date": f"202{i}-12-31", "enterpriseValueOverEBITDA": 10.0 - i * 0.5}
+                for i in range(4)]
+        rows.append({"date": "2024-12-31", "enterpriseValueOverEBITDA": 7.0})
+        km = pd.DataFrame(rows)
         r = factor_valuation_vs_history(km)
         assert r.available
-        # current = 8x, history includes 8,8.5,9,9.5,10 → median ~9 → discount
+        # current = 7x vs median 9x → discount → bullish
         assert r.score > 0
 
     def test_premium_to_history_bearish(self):
