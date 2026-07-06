@@ -47,6 +47,8 @@ def load_price_frame_yahoo(
     if cache_file.exists():
         df = pd.read_csv(cache_file)
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        if "price_adjusted" not in df.columns:
+            df["price_adjusted"] = True
         return df
 
     ticker = yf.Ticker(symbol)
@@ -69,6 +71,7 @@ def load_price_frame_yahoo(
         "volume":    raw["Volume"].astype(float),
         "symbol":    symbol.upper(),
         "source_csv": str(cache_file.resolve()),
+        "price_adjusted": True,   # auto_adjust=True → split/dividend adjusted
     })
 
     df.to_csv(cache_file, index=False)

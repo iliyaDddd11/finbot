@@ -132,24 +132,23 @@ def _get_benchmark_return(
         )
         df  = _ensure_close_column(raw)
         anchor_idx = _pick_anchor_row(df, as_of_date)
-        if anchor_idx is None:
+        future = df.iloc[anchor_idx + 1:].copy() if anchor_idx is not None else pd.DataFrame()
+        if anchor_idx is None or future.empty:
+            # Definitive "no benchmark data for this date/horizon" — safe to cache.
             _SPY_CACHE[key] = None
             return None
         exit_target = df.loc[anchor_idx, "timestamp"] + pd.Timedelta(days=horizon_days)
-        future = df.iloc[anchor_idx + 1:].copy()
-        if future.empty:
-            _SPY_CACHE[key] = None
-            return None
         eligible = future.index[future["timestamp"] >= exit_target].tolist()
         exit_idx = eligible[0] if eligible else future.index[-1]
         entry = float(df.loc[anchor_idx, "close_eval"])
         exit_ = float(df.loc[exit_idx,  "close_eval"])
         bm = float(exit_ / entry - 1.0) if entry != 0 else None
+        _SPY_CACHE[key] = bm
+        return bm
     except Exception:
-        bm = None
-
-    _SPY_CACHE[key] = bm
-    return bm
+        # Transient failure (e.g. a download hiccup): do NOT cache, so a later
+        # ticker on the same date can retry instead of every alpha being nulled.
+        return None
 
 
 def compute_realized_outcome(

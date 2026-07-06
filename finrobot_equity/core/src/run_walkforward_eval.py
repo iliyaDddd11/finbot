@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -40,6 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--price-lookback-days", type=int, default=365)
     parser.add_argument("--skip-analysis", action="store_true",
                         help="Only build frozen snapshots, no signal computation.")
+    parser.add_argument("--allow-empty", action="store_true",
+                        help="Exit 0 even if no predictions were produced. By default a run "
+                             "that yields zero predictions (e.g. every data fetch failed) "
+                             "exits non-zero so an outage isn't mistaken for a clean run.")
     return parser
 
 
@@ -357,6 +362,17 @@ def main(argv: list[str] | None = None) -> None:
         json.dump(summary, f, indent=2)
 
     print(json.dumps(summary, indent=2))
+
+    # Fail loud: a run that produced no predictions (short of an explicit
+    # snapshot-only run) usually means every fetch failed — don't let that
+    # look like a successful "0 predictions" run.
+    if not args.skip_analysis and len(prediction_rows) == 0 and not args.allow_empty:
+        print(
+            "[ERROR] No predictions were produced. If this is expected, re-run with "
+            "--allow-empty; otherwise check the [WARN] lines above for data-fetch failures.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":

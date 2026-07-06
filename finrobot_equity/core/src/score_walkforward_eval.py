@@ -133,7 +133,11 @@ def main(argv: list[str] | None = None) -> None:
     scored_df = pd.DataFrame(scored_rows)
     scored_df = enrich_scored_predictions(scored_df)
 
-    scorecard = compute_scorecard(scored_df, periods_per_year=args.periods_per_year)
+    scorecard = compute_scorecard(
+        scored_df,
+        periods_per_year=args.periods_per_year,
+        min_pattern_count=args.min_pattern_count,
+    )
     scorecard["patterns"] = scorecard.get("patterns", {})
     scorecard["patterns"]["right_patterns"] = scorecard["patterns"].get("right_patterns", [])[: args.min_pattern_count * 5]
     scorecard["patterns"]["wrong_patterns"] = scorecard["patterns"].get("wrong_patterns", [])[: args.min_pattern_count * 5]

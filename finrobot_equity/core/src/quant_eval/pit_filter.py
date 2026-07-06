@@ -47,12 +47,29 @@ def estimate_announcement_date(period_end: str, period: str = "annual") -> str:
     return (pd.Timestamp(period_end) + pd.Timedelta(days=lag)).strftime("%Y-%m-%d")
 
 
-def _infer_date_column(df: pd.DataFrame) -> str | None:
-    """Find the most likely date column in a financial DataFrame."""
-    for candidate in ("date", "Date", "calendarYear", "period", "reportDate", "fillingDate"):
+# Columns that record the ACTUAL public availability date → use as-is, no lag.
+# (FMP spells it "fillingDate"; "filingDate"/"acceptedDate" appear in some feeds.)
+_FILING_DATE_COLS = ("acceptedDate", "fillingDate", "filingDate")
+# Columns that record the fiscal PERIOD END → apply an estimated filing lag.
+_PERIOD_END_COLS = ("date", "Date", "calendarYear", "reportDate")
+
+
+def _infer_date_column(df: pd.DataFrame) -> tuple[str | None, str | None]:
+    """
+    Find the most likely date column and its kind.
+
+    Returns (column_name, kind) where kind is "filing" (actual availability
+    date, used directly) or "period_end" (fiscal period end, needs a filing
+    lag). Prefers a real filing date when present so a late filer isn't marked
+    available at the estimated date. Returns (None, None) if nothing usable.
+    """
+    for candidate in _FILING_DATE_COLS:
         if candidate in df.columns:
-            return candidate
-    return None
+            return candidate, "filing"
+    for candidate in _PERIOD_END_COLS:
+        if candidate in df.columns:
+            return candidate, "period_end"
+    return None, None
 
 
 def filter_to_pit(
@@ -80,7 +97,11 @@ def filter_to_pit(
     if df is None or df.empty:
         return df
 
-    col = date_col or _infer_date_column(df)
+    if date_col:
+        col = date_col
+        kind = "filing" if date_col in _FILING_DATE_COLS else "period_end"
+    else:
+        col, kind = _infer_date_column(df)
     if col is None:
         # Can't filter without a date column — return as-is with a warning flag
         return df
@@ -90,11 +111,24 @@ def filter_to_pit(
     except Exception:
         return df
 
-    lag = ANNUAL_FILING_LAG_DAYS if period == "annual" else QUARTERLY_FILING_LAG_DAYS
-    cutoff = pd.Timestamp(as_of_date)
+    # If the entire column is unparseable (e.g. a "period" label column with
+    # values like "FY"/"Q1"), do NOT silently drop every row — that would
+    # masquerade as "all data is post-announcement" and corrupt downstream
+    # signals. Leave the frame unchanged; the caller's data is the problem.
+    if int(dates.notna().sum()) == 0:
+        return df.copy()
 
-    # A row is available if: fiscal_period_end + lag <= as_of_date
-    available_mask = (dates + pd.Timedelta(days=lag)) <= cutoff
+    cutoff = pd.Timestamp(as_of_date)
+    if kind == "filing":
+        # Actual filing/acceptance date — available as soon as it is <= as_of.
+        available_mask = dates <= cutoff
+    else:
+        # Fiscal period end + estimated filing lag.
+        lag = ANNUAL_FILING_LAG_DAYS if period == "annual" else QUARTERLY_FILING_LAG_DAYS
+        available_mask = (dates + pd.Timedelta(days=lag)) <= cutoff
+
+    # NaT (unparseable) rows are treated as unavailable (conservative).
+    available_mask = available_mask.fillna(False)
     return df[available_mask].copy()
 
 

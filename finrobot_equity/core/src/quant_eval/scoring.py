@@ -44,10 +44,15 @@ def enrich_scored_predictions(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def compute_scorecard(scored_df: pd.DataFrame, periods_per_year: int = 12) -> dict[str, Any]:
+def compute_scorecard(
+    scored_df: pd.DataFrame,
+    periods_per_year: int = 12,
+    min_pattern_count: int = 2,
+) -> dict[str, Any]:
     # periods_per_year defaults to 12 because the walk-forward grid is monthly
     # (date_grid.build_month_end_grid uses freq="ME").  Annualised Sharpe / ICIR
     # / Calmar are only correct when this matches the true rebalance cadence.
+    # min_pattern_count gates which decision patterns qualify (not just display).
     if scored_df.empty:
         return {
             "num_predictions": 0,
@@ -74,7 +79,7 @@ def compute_scorecard(scored_df: pd.DataFrame, periods_per_year: int = 12) -> di
         "confidence_calibration_error": _safe_mean(scored_df["confidence_error"]),
         "avg_max_upside":    _safe_mean(scored_df.get("max_upside", pd.Series(dtype=float))),
         "avg_max_drawdown":  _safe_mean(scored_df.get("max_drawdown", pd.Series(dtype=float))),
-        "patterns":          summarize_patterns(scored_df),
+        "patterns":          summarize_patterns(scored_df, min_count=min_pattern_count),
     }
 
     # Add professional quant metrics (IC, ICIR, Sharpe, max_drawdown, Calmar)

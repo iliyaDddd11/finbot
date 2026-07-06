@@ -15,19 +15,39 @@ committed source. See **[PLAN.md](PLAN.md)** for the remediation roadmap; the
 trusted as-is: the cross-sectional scoring silently **inverts two factors**, and
 mixing adjusted and raw price sources makes any split-spanning return wrong.
 
-> **Remediation status (this branch).** Fixed with regression tests:
-> **#1** (z-score the direction-normalized score), **#3** (monthly annualization,
-> `periods_per_year=12` + `--periods-per-year` flag), **#4** (per-period portfolio
-> Sharpe/drawdown/Calmar + `max_drawdown` seeded at 1.0), **#5/#6** (realized
-> return is `None` not `0.0`; partial horizons flagged via `horizon_complete`),
-> **#7** (anchor download starts before `as_of_date`), **#8** (TC subtracted on
-> both sides). A pre-existing broken valuation-factor test fixture was also
-> corrected. **Not yet addressed** (follow-ups): **#2** (needs a live
-> Dukascopy-vs-Yahoo adjustment check), and the MEDIUM/LOW items #9–#28. One
-> pre-existing test failure remains in off-path `portfolio_construction`
-> (`test_gross_cap_flag_set_when_scaled`) — the sector cap absorbs gross before
-> the gross cap triggers, so the test's expectation is wrong; left for the P2
-> portfolio work.
+> **Remediation status (this branch).**
+>
+> **Phase 0 (P0) — fixed with regression tests:** **#1** (z-score the
+> direction-normalized score), **#3** (monthly annualization, `periods_per_year=12`
+> + `--periods-per-year` flag), **#4** (per-period portfolio Sharpe/drawdown/Calmar
+> + `max_drawdown` seeded at 1.0), **#5/#6** (realized return is `None` not `0.0`;
+> partial horizons flagged via `horizon_complete`), **#7** (anchor download starts
+> before `as_of_date`), **#8** (TC subtracted on both sides).
+>
+> **Phase 1 — fixed with regression tests:** **#2** (adjusted-by-default price
+> routing: `load_price_frame(prefer_adjusted=True)` routes all equities through the
+> adjusted Yahoo feed; frames carry a `price_adjusted` flag — *still verify
+> Dukascopy's convention before using `prefer_adjusted=False` in anger*), **#9**
+> (transient benchmark errors no longer cached/poison the cross-section), **#10**
+> (PIT prefers the real `fillingDate`/`acceptedDate` over the estimate), **#11**
+> (unparseable date columns no longer silently empty financials), **#13**
+> (`--min-pattern-count` gates qualification), **#14** (empty run exits non-zero
+> unless `--allow-empty`), **#16** (`NaN` realized return → "unknown", not "wrong"),
+> **#17** (Dukascopy timestamps parse epoch-ms *and* ISO-8601), **#28** (TSLA has a
+> sector). A pre-existing broken valuation-factor test fixture was also corrected.
+>
+> **Reviewed, intentionally kept:** **#12** (scale mixing) is largely resolved by
+> the #1 fix — cross-section z-scores and the tanh fallback now share the [-2,2]
+> basis; **#15** (risk-flag stripping under cross-section mode) is asserted as
+> intended by `test_cs_clears_unavailable_risk_flags`; **#27** (year-only
+> `calendarYear`) is left latent because `test_auto_detects_calendarYear_column`
+> relies on `calendarYear` holding full dates.
+>
+> **Follow-ups (Phase 2+):** MEDIUM/LOW items #18–#26, cost-netting, portfolio
+> wiring. One pre-existing test failure remains in off-path `portfolio_construction`
+> (`test_gross_cap_flag_set_when_scaled`) — the sector cap absorbs gross before the
+> gross cap triggers, so the test's expectation is wrong; fixed as part of Phase 2
+> net-neutrality work.
 
 ---
 
