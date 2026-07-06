@@ -70,7 +70,7 @@ gate (Phase 5) before any hardening work.
 | **2** | Tradeable methodology | Metrics **net of costs**; sharper IC; factor refinements | cost-netting, #18, #19, #20, #21, #22, #26 | ✅ done¹ |
 | **3** | Reproducibility & infra | Typed config; end-to-end integration test; CI; docs | config object, integration test, CI, quant_eval README | ✅ done² |
 | **4** | Research surface | Multi-horizon, multi-universe studies; factor research tooling | universe expansion, factor attribution UX, ablations | ⏳ needs live pipeline |
-| **5** | Report gen + web app | Review gate → hardening of `create_equity_report`, `equity_agents`, `web_app` | (scoped after review) | ⏳ review-gated |
+| **5** | Report gen + web app | Review gate → hardening of `create_equity_report`, `equity_agents`, `web_app` | see **[REVIEW_PHASE5.md](REVIEW_PHASE5.md)** | ◑ review done; critical fixes landed, hardening backlog scoped |
 
 ¹ Deferred within Phase 2: wiring the *constructed book weights* into the scored
 return path (needs a live end-to-end run to validate). ² Deferred within Phase 3:

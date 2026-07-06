@@ -81,6 +81,10 @@ init_default_admin()
 # Add middleware for request logging
 app.add_middleware(RequestLoggerMiddleware)
 
+# Session cookies are marked Secure by default (only sent over HTTPS). For local
+# HTTP development set COOKIE_SECURE=0.
+_COOKIE_SECURE = os.getenv("COOKIE_SECURE", "1").strip().lower() not in ("0", "false", "no", "")
+
 # Include admin routes
 app.include_router(admin_router)
 
@@ -171,6 +175,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
         key="session_id",
         value=session_id,
         httponly=True,
+        secure=_COOKIE_SECURE,
         max_age=max_age,
         samesite="lax"
     )
@@ -197,6 +202,7 @@ async def register(req: RegisterRequest, request: Request, response: Response):
         key="session_id",
         value=session_id,
         httponly=True,
+        secure=_COOKIE_SECURE,
         max_age=7 * 24 * 60 * 60,
         samesite="lax"
     )
@@ -328,6 +334,7 @@ async def github_callback(code: str, response: Response):
             key="session_id",
             value=session_id,
             httponly=True,
+            secure=_COOKIE_SECURE,
             max_age=7 * 24 * 60 * 60,
             samesite="lax"
         )

@@ -2,6 +2,7 @@
 CRUD operations for database
 """
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -13,15 +14,45 @@ from .models import User, Session as SessionModel, RequestLog, ReportRequest
 # =============================================================================
 # Password utilities
 # =============================================================================
+#
+# Passwords are stored with salted, key-stretched PBKDF2-HMAC-SHA256 (stdlib,
+# no extra dependency). The previous scheme was a single unsalted SHA-256 pass,
+# which is fast to brute-force and lets identical passwords collide. Legacy
+# 64-hex SHA-256 hashes still verify (and are transparently upgraded on the next
+# successful login via needs_rehash), so existing accounts keep working.
+
+_PBKDF2_ALGO = "pbkdf2_sha256"
+_PBKDF2_ROUNDS = 200_000
+
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash a password with a fresh random salt using PBKDF2-HMAC-SHA256."""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ROUNDS)
+    return f"{_PBKDF2_ALGO}${_PBKDF2_ROUNDS}${salt.hex()}${dk.hex()}"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return hash_password(plain_password) == hashed_password
+    """Verify a password against a stored hash (constant-time)."""
+    if not hashed_password:
+        return False
+    if hashed_password.startswith(_PBKDF2_ALGO + "$"):
+        try:
+            _algo, rounds_s, salt_hex, dk_hex = hashed_password.split("$")
+            dk = hashlib.pbkdf2_hmac(
+                "sha256", plain_password.encode(), bytes.fromhex(salt_hex), int(rounds_s)
+            )
+            return hmac.compare_digest(dk, bytes.fromhex(dk_hex))
+        except Exception:
+            return False
+    # Legacy unsalted SHA-256 — verified in constant time, upgraded on next login.
+    legacy = hashlib.sha256(plain_password.encode()).hexdigest()
+    return hmac.compare_digest(legacy, hashed_password)
+
+
+def needs_rehash(hashed_password: Optional[str]) -> bool:
+    """True if the stored hash is not in the current PBKDF2 format."""
+    return not (hashed_password or "").startswith(_PBKDF2_ALGO + "$")
 
 
 # =============================================================================

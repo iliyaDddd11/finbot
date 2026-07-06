@@ -1,6 +1,7 @@
 """
 Admin API routes for viewing users and request logs
 """
+import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from .database.connection import SessionLocal
@@ -17,28 +18,40 @@ def get_db():
         db.close()
 
 
+def admin_emails() -> set[str]:
+    """
+    Allowed admin emails, from FINROBOT_ADMIN_EMAILS (comma-separated) plus the
+    bootstrapped FINROBOT_ADMIN_EMAIL. Matches the gating already used by
+    /api/logs in main.py. Fails CLOSED: if none are configured, nobody is admin.
+    """
+    raw = os.getenv("FINROBOT_ADMIN_EMAILS", "")
+    emails = {e.strip().lower() for e in raw.split(",") if e.strip()}
+    boot = os.getenv("FINROBOT_ADMIN_EMAIL", "").strip().lower()
+    if boot:
+        emails.add(boot)
+    return emails
+
+
 def require_admin(request: Request):
-    """Simple admin check - in production, use proper role-based auth"""
-    # For now, just check if user is logged in
-    # You can add admin role check here later
+    """Require an authenticated user whose email is on the admin allowlist."""
     session_id = request.cookies.get("session_id")
     if not session_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     db = SessionLocal()
     try:
         session = crud.get_session(db, session_id)
         if not session:
             raise HTTPException(status_code=401, detail="Invalid session")
-        
+
         user = crud.get_user_by_id(db, session.user_id)
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        
-        # Add admin check here if needed
-        # if user.email not in ADMIN_EMAILS:
-        #     raise HTTPException(status_code=403, detail="Admin access required")
-        
+
+        allowed = admin_emails()
+        if not allowed or (user.email or "").strip().lower() not in allowed:
+            raise HTTPException(status_code=403, detail="Admin access required")
+
         return user
     finally:
         db.close()
