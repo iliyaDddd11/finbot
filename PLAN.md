@@ -4,8 +4,10 @@ _Scope: the custom `finrobot_equity/` module, with primary focus on the
 `quant_eval` walk-forward signal-evaluation harness. The upstream FinRobot
 library is third-party and out of scope here._
 
-> Read this together with **[REVIEW.md](REVIEW.md)**, the correctness review.
-> The roadmap below is prioritized by the findings there.
+> Read this together with **[REVIEW.md](REVIEW.md)** (the correctness review) and
+> **[IMPLEMENTATION_MAP.md](IMPLEMENTATION_MAP.md)** (the full, phased,
+> execution-ready program that operationalizes this roadmap). The roadmap below
+> is prioritized by the findings in REVIEW.md.
 
 ---
 
